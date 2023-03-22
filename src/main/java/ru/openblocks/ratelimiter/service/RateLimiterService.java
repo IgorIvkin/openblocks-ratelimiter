@@ -1,12 +1,8 @@
 package ru.openblocks.ratelimiter.service;
 
 import jakarta.annotation.PostConstruct;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
+
+import java.util.*;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +11,7 @@ import org.apache.commons.collections4.queue.CircularFifoQueue;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.openblocks.ratelimiter.common.RateLimiterSetup;
+import ru.openblocks.ratelimiter.common.RateLimiterTimeUnit;
 import ru.openblocks.ratelimiter.config.RateLimiterConfig;
 import ru.openblocks.ratelimiter.exception.LimiterNotFoundException;
 
@@ -62,12 +59,16 @@ public class RateLimiterService {
     /**
      * Обновляет лимиты в существующих рейт-лимитерах, давая возможность продолжить
      * работу с использованием этих рейт-лимитеров. Этот метод вызывается по расписанию.
+     *
+     * @param unitToUpdate временной диапазон для обновления
      */
-    public void updateRateLimits() {
+    public void updateRateLimits(RateLimiterTimeUnit unitToUpdate) {
+        log.debug("Updating rate limits for unit {}", unitToUpdate.getStrValue());
         Map<String, RateLimiterSetup> limiters = rateLimiterConfig.getLimiters();
         limiters.forEach((limiterName, limiter) -> {
 
             final Integer limit = limiter.getLimit();
+            final RateLimiterTimeUnit unit = limiter.getUnit();
             if (limit == null) {
                 throw new IllegalStateException("Cannot update limit for " + limiterName + ", limit is null");
             }
@@ -76,7 +77,10 @@ public class RateLimiterService {
                 throw new IllegalStateException("Cannot update limit for " + limiterName + ", no such bucket");
             }
 
-            bucket.addAll(createNewTokens(limit));
+            if (Objects.equals(unit, unitToUpdate)) {
+                log.debug("Updating rate limits for rate limiter {}", limiterName);
+                bucket.addAll(createNewTokens(limit));
+            }
 
         });
     }
@@ -86,10 +90,12 @@ public class RateLimiterService {
         limiters.forEach((limiterName, limiter) -> {
 
             final Integer limit = limiter.getLimit();
+            final RateLimiterTimeUnit unit = limiter.getUnit();
             if (limit == null) {
                 throw new IllegalStateException("Cannot get limit for limiter: " + limiterName);
             }
-            log.info("Initialize token bucket \"{}\" with limit {} requests/min", limiterName, limit);
+            log.info("Initialize token bucket \"{}\" with limit {} requests/{}", limiterName,
+                    limit, unit.getStrValue());
 
             CircularFifoQueue<Long> bucket = new CircularFifoQueue<>(limit);
             Queue<Long> sychronizedQueue = QueueUtils.synchronizedQueue(bucket);
