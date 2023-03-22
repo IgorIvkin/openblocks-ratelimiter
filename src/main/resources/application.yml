@@ -1,0 +1,7 @@
+server:
+  port: 8901
+
+rate-limiter:
+  limiters:
+    basic:
+      limit: 10
