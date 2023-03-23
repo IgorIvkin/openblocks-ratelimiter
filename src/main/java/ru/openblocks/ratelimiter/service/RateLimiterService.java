@@ -104,6 +104,6 @@ public class RateLimiterService {
     }
 
     private List<Long> createNewTokens(Integer size) {
-        return new ArrayList<>(Collections.nCopies(size, DEFAULT_TOKEN_VALUE));
+        return Collections.nCopies(size, DEFAULT_TOKEN_VALUE);
     }
 }

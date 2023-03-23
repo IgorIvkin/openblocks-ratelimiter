@@ -1,0 +1,5 @@
+rate-limiter:
+  limiters:
+    basic:
+      limit: 2
+      unit: SECONDS
