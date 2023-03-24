@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SpringBootTest
 @DisplayName("Интерационные тесты на сервис обслуживания рейт-лимитеров")
-public class RateLimiterServiceIT {
+public class RateLimiterBucketServiceIT {
 
     private static final String BASIC_LIMITER_NAME = "basic";
 
@@ -23,7 +23,7 @@ public class RateLimiterServiceIT {
         assertEquals(Boolean.TRUE, rateLimiterService.checkRateLimit(BASIC_LIMITER_NAME).block());
         assertEquals(Boolean.FALSE, rateLimiterService.checkRateLimit(BASIC_LIMITER_NAME).block());
 
-        Thread.sleep(2000L);
+        Thread.sleep(1000L);
 
         assertEquals(Boolean.TRUE, rateLimiterService.checkRateLimit(BASIC_LIMITER_NAME).block());
     }

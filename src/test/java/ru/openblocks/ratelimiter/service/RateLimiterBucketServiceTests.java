@@ -7,17 +7,17 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import ru.openblocks.ratelimiter.common.RateLimiterSetup;
-import ru.openblocks.ratelimiter.common.RateLimiterTimeUnit;
 import ru.openblocks.ratelimiter.config.RateLimiterConfig;
 
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(SpringExtension.class)
 @DisplayName("Юнит-тесты на сервис обслуживания рейт-лимитеров")
-public class RateLimiterServiceTests {
+public class RateLimiterBucketServiceTests {
 
     private static final String BASIC_LIMITER_NAME = "basic";
 
@@ -33,22 +33,18 @@ public class RateLimiterServiceTests {
         when(rateLimiterConfig.getLimiters()).thenReturn(getLimiters());
 
         rateLimiterService.initialize();
-        rateLimiterService.updateRateLimits(RateLimiterTimeUnit.MINUTES);
 
         assertEquals(Boolean.TRUE, rateLimiterService.checkRateLimit(BASIC_LIMITER_NAME).block());
         assertEquals(Boolean.TRUE, rateLimiterService.checkRateLimit(BASIC_LIMITER_NAME).block());
         assertEquals(Boolean.TRUE, rateLimiterService.checkRateLimit(BASIC_LIMITER_NAME).block());
         assertEquals(Boolean.FALSE, rateLimiterService.checkRateLimit(BASIC_LIMITER_NAME).block());
-
-        rateLimiterService.updateRateLimits(RateLimiterTimeUnit.MINUTES);
-        assertEquals(Boolean.TRUE, rateLimiterService.checkRateLimit(BASIC_LIMITER_NAME).block());
     }
 
     private Map<String, RateLimiterSetup> getLimiters() {
         return Map.of(
                 BASIC_LIMITER_NAME, RateLimiterSetup.builder()
                         .limit(3)
-                        .unit(RateLimiterTimeUnit.MINUTES)
+                        .unit(TimeUnit.MINUTES)
                         .build()
         );
     }

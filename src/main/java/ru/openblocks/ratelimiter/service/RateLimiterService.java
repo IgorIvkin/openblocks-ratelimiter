@@ -2,16 +2,16 @@ package ru.openblocks.ratelimiter.service;
 
 import jakarta.annotation.PostConstruct;
 
+import java.time.Clock;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.QueueUtils;
-import org.apache.commons.collections4.queue.CircularFifoQueue;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import ru.openblocks.ratelimiter.common.RateLimiterBucket;
 import ru.openblocks.ratelimiter.common.RateLimiterSetup;
-import ru.openblocks.ratelimiter.common.RateLimiterTimeUnit;
 import ru.openblocks.ratelimiter.config.RateLimiterConfig;
 import ru.openblocks.ratelimiter.exception.LimiterNotFoundException;
 
@@ -25,14 +25,11 @@ import ru.openblocks.ratelimiter.exception.LimiterNotFoundException;
 @RequiredArgsConstructor
 public class RateLimiterService {
 
-    /**
-     * Значение токена по умолчанию.
-     */
-    private static final Long DEFAULT_TOKEN_VALUE = 1L;
-
     private final RateLimiterConfig rateLimiterConfig;
 
-    private final Map<String, Queue<Long>> buckets = new HashMap<>();
+    private final Map<String, RateLimiterBucket> buckets = new HashMap<>();
+
+    private final Clock clock = Clock.systemDefaultZone();
 
     @PostConstruct
     public void initialize() {
@@ -47,63 +44,33 @@ public class RateLimiterService {
      * @return статус, доступны ли еще запросы по этому лимитеру
      */
     public Mono<Boolean> checkRateLimit(String limiterName) {
-        Queue<Long> bucket = buckets.get(limiterName);
+        final RateLimiterBucket bucket = buckets.get(limiterName);
         if (bucket == null) {
             throw new LimiterNotFoundException("Cannot find rate limiter by name: " + limiterName);
         }
-
-        final Long token = bucket.poll();
-        return Mono.just(token != null);
-    }
-
-    /**
-     * Обновляет лимиты в существующих рейт-лимитерах, давая возможность продолжить
-     * работу с использованием этих рейт-лимитеров. Этот метод вызывается по расписанию.
-     *
-     * @param unitToUpdate временной диапазон для обновления
-     */
-    public void updateRateLimits(RateLimiterTimeUnit unitToUpdate) {
-        log.debug("Updating rate limits for unit {}", unitToUpdate.getStrValue());
-        Map<String, RateLimiterSetup> limiters = rateLimiterConfig.getLimiters();
-        limiters.forEach((limiterName, limiter) -> {
-
-            final Integer limit = limiter.getLimit();
-            final RateLimiterTimeUnit unit = limiter.getUnit();
-            if (limit == null) {
-                throw new IllegalStateException("Cannot update limit for " + limiterName + ", limit is null");
-            }
-            Queue<Long> bucket = buckets.get(limiterName);
-            if (bucket == null) {
-                throw new IllegalStateException("Cannot update limit for " + limiterName + ", no such bucket");
-            }
-
-            if (Objects.equals(unit, unitToUpdate)) {
-                log.debug("Updating rate limits for rate limiter {}", limiterName);
-                bucket.addAll(createNewTokens(limit));
-            }
-
-        });
+        return Mono.just(bucket.getToken() >= 0);
     }
 
     private void initializeTokenBuckets() {
         Map<String, RateLimiterSetup> limiters = rateLimiterConfig.getLimiters();
-        limiters.forEach((limiterName, limiter) -> {
+        limiters.forEach((limiterName, limiterSetup) -> {
 
-            final Integer limit = limiter.getLimit();
-            final RateLimiterTimeUnit unit = limiter.getUnit();
+            final Integer limit = limiterSetup.getLimit();
+            final TimeUnit unit = limiterSetup.getUnit();
             if (limit == null) {
                 throw new IllegalStateException("Cannot get limit for limiter: " + limiterName);
             }
-            log.info("Initialize token bucket \"{}\" with limit {} requests/{}", limiterName,
-                    limit, unit.getStrValue());
+            log.info("Initialize token bucket \"{}\" with limit {} requests / {}", limiterName, limit, unit);
 
-            CircularFifoQueue<Long> bucket = new CircularFifoQueue<>(limit);
-            Queue<Long> sychronizedQueue = QueueUtils.synchronizedQueue(bucket);
-            buckets.put(limiterName, sychronizedQueue);
+            final RateLimiterBucket bucket =
+                    RateLimiterBucket.builder()
+                            .tokens(Long.valueOf(limit))
+                            .clock(clock)
+                            .lastCallTime(clock.millis())
+                            .limit(limit)
+                            .unit(unit)
+                            .build();
+            buckets.put(limiterName, bucket);
         });
-    }
-
-    private List<Long> createNewTokens(Integer size) {
-        return Collections.nCopies(size, DEFAULT_TOKEN_VALUE);
     }
 }

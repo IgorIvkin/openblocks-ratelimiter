@@ -21,5 +21,5 @@ public class RateLimiterSetup {
      *   MINUTES - минуты
      *   SECONDS - секунды
      */
-    private RateLimiterTimeUnit unit;
+    private TimeUnit unit;
 }
